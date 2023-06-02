@@ -1,0 +1,115 @@
+setwd=setwd("E:/项目/染色体景观/RNA/")
+#读取
+for(i in c(1:length(dir()))){assign(namelist[i],read.table(namelist[i],sep = "\t",header = T))}
+Syn-1 <- `Syn29-14-1.counts.txt`
+Syn_1 <- `Syn29-14-1.counts.txt`
+Syn_2 <- `Syn29-14-2.counts.txt`
+Syn_3 <- `Syn29-14-3.counts.txt`
+WT_1 <- `WT-1.count.txt`
+WT_2 <- `WT-2.count.txt`
+WT_3 <- `WT-3.count.txt`
+SE <- data.frame(Syn_1[1],Syn_1[7],Syn_2[7],Syn_3[7],WT_1[7],WT_2[7],WT_3[7])
+colnames(SE) <- c("Geneid","Syn_1","Syn_2","Syn_3","WT_1","WT_2","WT_3")
+
+#差异分析
+info <- data.frame(factor(c("syn","syn","syn","wt","wt","wt")),row.names = c("Syn_1","Syn_2","Syn_3","WT_1","WT_2","WT_3"))
+colnames(info)="condition"
+library(DESeq2)
+rownames(SE) <- SE[,1]
+SE <- SE[,2:7]
+
+dds <- DESeqDataSetFromMatrix(SE, info, design= ~ condition)
+dds_norm <- DESeq(dds)
+res <- results(dds_norm, contrast = c('condition', 'syn', 'wt'))
+res <- res[order(res$pvalue),]
+
+#绘制PCA聚类图
+vstdds <- vst(dds, blind=FALSE)
+plotPCA(vstdds, intgroup = "condition")
+
+#绘制火山图
+library(ggrepel)
+library(ggplot2)
+genes<- res
+genes$color <- ifelse(genes$padj<0.05 & abs(genes$log2FoldChange)>= 1,ifelse(genes$log2FoldChange > 1,'red','blue'),'gray')
+genes <- data.frame(genes)
+color <- c(red = "red",gray = "gray",blue = "blue")
+p <- ggplot(
+  # 指定数据、映射、颜色
+  genes, aes(log2FoldChange, -log10(padj), col = color)) +  
+  geom_point() +
+  theme_bw() +
+  scale_color_manual(values = color) +
+  # 辅助线
+  labs(x="log2 (fold change)",y="-log10 (q-value)") +
+  geom_hline(yintercept = -log10(0.05), lty=4,col="grey",lwd=0.6) +
+  geom_vline(xintercept = c(-1, 1), lty=4,col="grey",lwd=0.6) +
+  # 图例
+  theme(legend.position = "none",
+        panel.grid=element_blank(),
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14)+
+  # 注释
+  geom_text_repel(
+    data = subset(genes, padj < 1e-100 & abs(genes$log2FoldChange) >= 10),
+    aes(label = rownames(genes)),
+    size = 5,
+    box.padding = unit(0.35, "lines"),
+    point.padding = unit(0.3, "lines"))
+        )
+
+# 上下调基因热图（20个）
+res_up<- res[which(res$log2FoldChange >= 1 & res$pvalue < 0.05),] 
+res_down<- res[which(res$log2FoldChange <= -1 & res$pvalue < 0.05),]    # 采用pvalue<0.05标准，分别筛选出表达量显著上调和表达量显著下降的基因
+res_up <- head(res_up,20)
+res_down <- head(res_down,20)
+res_total <- rbind(res_up,res_down)
+res_total<- res_total[order(res_total$pvalue),]
+pheatmap(as.matrix(df),
+         show_rownames = F,
+         show_colnames = T,
+         cluster_cols = F,
+         cluster_rows=T,
+         height=10,  #输出图片的高度
+         scale = "row",
+         angle_col=45, #调整字的角度
+         color =colorRampPalette(c("#8854d0", "#ffffff","#fa8231"))(100),
+         clustering_distance_rows = 'euclidean', 
+         clustering_method = 'single',
+)       
+
+#对差异表达基因进行GO分析
+#因为ENRICHGO没有小立碗藓对应的数据库，需要自己建立一个库
+library(clusterProfiler)
+go_info <- read.gmt(gmtfile = "gprofiler_full_ppatens.name.gmt")
+go_info <- go_info[,c(2,1)]
+colnames(go_info) <- c("GID","GO")
+go_info[,3] <- rep("IEA",731521)
+colnames(go_info) <- c("GID","GO","EVIDENCE")
+library(AnnotationForge)
+gene_info <- names(table(go_info[,1]))
+gene_info <- data.frame(gene_info,gene_info,gene_info,gene_info)
+colnames(gene_info) <- c("GID","ECGannot","SYMBOL","ENTREZID")
+makeOrgPackage(gene_info=gene_info,go=go_info,goTable = "go",version = "0.1",maintainer = "LTL <2201111973@pku.stu.edu.cn>",author = "LTL <2201111973@pku.stu.edu.cn>",tax_id= "3218")
+install.packages("./org.Ppatens.eg.db/",repos = NULL,type = "source")
+
+MF<-enrichGO(gene_inter, OrgDb="org.Ppatens.eg.db", keyType = "GID", ont = "MF", pvalueCutoff = 0.1, pAdjustMethod = "BH", qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 500, readable = FALSE, pool = FALSE)
+BP<-enrichGO(gene_inter, OrgDb="org.Ppatens.eg.db", keyType = "GID", ont = "BP", pvalueCutoff = 0.1, pAdjustMethod = "BH", qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 500, readable = FALSE, pool = FALSE)
+CC<-enrichGO(gene_inter, OrgDb="org.Ppatens.eg.db", keyType = "GID", ont = "CC", pvalueCutoff = 0.1, pAdjustMethod = "BH", qvalueCutoff = 0.2, minGSSize = 10, maxGSSize = 500, readable = FALSE, pool = FALSE)
+barplot(MF,BP,CC)
+dotplot(MF,BP,CC)
+enrichplot::goplot(MF,BP,CC)
+
+#将表达矩阵转换为TPM
+anno <- read.table("E:/项目/染色体景观/RNA/anno.txt",sep="\t")
+anno <- anno[which(anno[,1] == "gene"),]
+anno[,5] <- anno[,3]-anno[,2]+1
+anno <- anno[,c(4,5)]
+colnames(anno) <- c("Geneid","whidth")
+SE_lenth <- merge(SE,anno,by="Geneid")
+SE_lenth[,9:14] <- SE_lenth[,2:7]/SE_lenth$whidth
+SE_lenth[,9:14] <- t(t(SE_lenth[,9:14])*10^6/colSums(SE_lenth[,9:14]))
+TPM_mitrix <- SE_lenth[,c(1,9,10,11,12,13,14)]
+
+#挑选出替换区域附近的基因
+write.csv(TPM_mitrix[which(TPM_mitrix$Geneid %in% c("Pp3c18_10","Pp3c18_30","Pp3c18_40","Pp3c18_50","Pp3c18_60","Pp3c18_90","Pp3c18_140","Pp3c18_170","Pp3c18_200")),],file="RNA/替换区域TPM.csv")

@@ -1,0 +1,37 @@
+#!/bin/bash
+ref_dir=$1
+read1=$2
+read2=$3
+out=$4
+base=`basename ${read1} .R1.fastq.gz`
+
+trimmomatic PE -threads 8 /data/ltl/BS_seq/WGBS-29-3_L1_703D03.R1.fastq.gz /data/ltl/BS_seq/WGBS-29-3_L1_703D03.R2.fastq.gz /data/ltl/BS_seq/WT_1_1_paired.fastq.gz /data/ltl/BS_seq/WT_1_1_non.fastq.gz /data/ltl/BS_seq/WT_1_2_paired.fastq.gz /data/ltl/BS_seq/WT_1_2_non.fastq.gz LEADING:3 TRAILING:3 SLIDINGWINDOW:15:20 MINLEN:50 
+
+bismark -N 0 -L 20 --quiet --un --ambiguous --bam --bowtie2 \
+--path_to_bowtie2 /data/ltl/conda/envs/WGBS/bin/ \
+${ref_dir} \
+-o ${out} \
+--fastq --prefix ${base} \
+-1 ${read1} \
+-2 ${read2}
+
+deduplicate_bismark \
+-p ${base}_bismark_bt2_pe.bam \
+--bam \
+--samtools_path /data/ltl/conda/envs/WGBS/bin/ \
+--output_dir ${out}
+
+bismark_methylation_extractor \
+--comprehensive --no_overlap -p \
+--bedGraph \
+--CX_context \
+--cytosine_report \
+--buffer_size 60G \
+--genome_folder /data/ltl/pp_genome/ \
+/data/ltl/BS_seq/29_3.29_3_1_paired_bismark_bt2_pe.bam
+
+bismark_methylation_extractor -s --gzip --bedGraph --CX --buffer_size 10G
+ 
+--cytosine_report --comprehensive --genome_folder ~/PATH/to/GRCh38/
+ 
+test_data_bismark_bt2.bam 2>extracor.log

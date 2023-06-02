@@ -1,0 +1,49 @@
+#!/bin/bash
+names=`ls *.R1.fastq.gz`
+names2=`ls *.R2.fastq.gz`
+for i in $names
+do
+for k in $names2
+do
+if [ `basename $i .R1.fastq.gz` == `basename $k .R2.fastq.gz` ]
+then
+base=`basename $i .R1.fastq.gz`
+trimmomatic PE -phred33 $i $k ${base}_1_paired.fq.gz ${base}_1_unpaired.fq.gz ${base}_2_paired.fq.gz ${base}_2_unpaired.fq.gz LEADING:3 TRAILING:3 SLIDINGWINDOW:15:20 MINLEN:50
+fi
+done
+done
+
+gffread annotation.gff3 -T -o pp3.gtf
+
+mkdir index
+
+STAR --runMode genomeGenerate \
+--runThreadN 30 \
+--genomeDir index \
+--genomeFastaFiles PP3.fa \
+--sjdbGTFfile PP3.gtf \
+--sjdbOverhang 149 \
+
+names=`ls *.R1.fastq.gz`
+names2=`ls *.R2.fastq.gz`
+for i in $names
+do
+for k in $names2
+do
+if [ `basename $i .R1.fastq.gz` == `basename $k .R2.fastq.gz` ]
+then
+java -jar /data/ltl/jar/trimmomatic-0.39.jar PE -phred33 $i $k ${base}_1_paired.fq.gz ${base}_1_unpaired.fq.gz ${base}_2_paired.fq.gz ${base}_2_unpaired.fq.gz LEADING:3 TRAILING:3 SLIDINGWINDOW:15:20 MINLEN:50
+base=`basename $i .R1.fastq.gz`
+gunzip ${base}_1_paired.fq.gz
+gunzip ${base}_2_paired.fq.gz
+STAR --runThreadN 5 \
+--genomeDir /data/ltl/PROJECT_SELF/ref/pp4+pJ356/index/ \
+--readFilesIn ${base}_1_paired.fq ${base}_2_paired.fq \
+--outSAMtype BAM SortedByCoordinate \
+--outFileNamePrefix $base \
+--sjdbOverhang 149
+fi
+done
+done
+
+../../tools/subread-2.0.3-Linux-x86_64/bin/featureCounts -T 10 -p -t exon -g gene_id -a ../../ref/P.patens_genome_annotation_v3.3.gtf -o WT-3.count.txt WT-3_L2_379X79Aligned.sortedByCoord.out.bam

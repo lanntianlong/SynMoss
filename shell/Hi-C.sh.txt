@@ -1,0 +1,26 @@
+#使用juicer进行Hi-C分析
+mkdir WT_Hi-C
+cd WT_Hi-C 
+ln -s ~/juicer/CPU scripts
+cd scripts/common
+wget https://hicfiles.tc4ga.com/public/juicer/juicer_tools.1.9.9_jcuda.0.8.jar
+ln -s juicer_tools.1.9.9_jcuda.0.8.jar  juicer_tools.jar
+cd ../..
+mkdir reference
+cp $ref ./reference
+mkdir restriction_sites
+cd restriction_sites/
+python /data/ltl/PROJECT_SELF/juicer/misc/generate_site_positions.py DpnII pp4_DpnII ../reference/Physcomitrium_patens_SZ_genome_mc.fasta
+awk 'BEGIN{OFS="\t"}{print $1, $NF}' pp4_DpnII_DpnII.txt > pp4.chrom.sizes
+cd ..
+mkdir work1 work2
+cd work1
+mkdir fastq
+cd fastq 
+ln -s *.fastq.gz ./
+cd ~/scripts
+
+nohup ./juicer.sh -d /data/ltl/PROJECT_SELF/Hi-C/29_Hi-C/work_1/ -D /data/ltl/PROJECT_SELF/Hi-C/29_Hi-C/ -y /data/ltl/PROJECT_SELF/Hi-C/29_Hi-C/restriction_sites/pp4_18_syn_del_DpnII_DpnII.txt -z /data/ltl/PROJECT_SELF/Hi-C/29_Hi-C/reference/pp4_18SYN_del+pJ356.fasta -p /data/ltl/PROJECT_SELF/Hi-C/29_Hi-C/restriction_sites/pp4.chrom.sizes -s DpnII
+
+#寻找loop和TAD
+java -jar juicer_tools_1.22.01.jar hiccups --cpu --threads 19 -r 5000,10000 /data/ltl/PROJECT_SELF/Hi-C/WT_Hi-C/work2/aligned/inter_30.hic /data/ltl/PROJECT_SELF/Hi-C/loop_summary/WT_2

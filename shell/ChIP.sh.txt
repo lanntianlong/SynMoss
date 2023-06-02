@@ -1,0 +1,27 @@
+#!/bin/bash
+
+names=`ls *.R1.fastq.gz`
+names2=`ls *.R2.fastq.gz`
+ref=$1
+ref_name=`basename $ref .fasta`
+for i in $names
+do
+for k in $names2
+do
+if [ `basename $i .R1.fastq.gz` == `basename $k .R2.fastq.gz` ]
+then
+base=`basename $i .R1.fastq.gz`
+#qc
+trimmomatic PE -phred33 $i $k ${base}_1_paired.fq.gz ${base}_1_unpaired.fq.gz ${base}_2_paired.fq.gz ${base}_2_unpaired.fq.gz LEADING:3 TRAILING:3 SLIDINGWINDOW:15:20 MINLEN:50
+#bwa
+bwa mem -M -t 50 -R '@RG\tID:804D73\tPL:illumina\tLB:library\tSM:SYN_WT' $ref ${base}_1_paired.fq.gz ${base}_2_paired.fq.gz | samtools view -S -b -> ${base}_raw.bam
+#sort
+samtools sort -@ 50 -m 8G -O bam -o ${base}_sorted.bam ${base}_raw.bam
+#最后加上多比对的reads
+#picard
+java -jar /data/ltl/jar/picard.jar MarkDuplicates REMOVE_DUPLICATES=true I=${base}_sorted.bam O=${base}_sorted_rm.bam M=${base}_sorted_rm_log
+#bamqc
+samtools index ${base}_${ref_name}.bam
+fi
+done
+done

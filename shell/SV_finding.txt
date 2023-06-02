@@ -1,0 +1,24 @@
+#MANTA
+/data/ltl/jar/tools/manta-1.6.0.centos6_x86_64/bin/configManta.py --bam B29-103_L3_704D07_sorted.bam --referenceFasta /data/ltl/PROJECT_SELF/ref/pp4_18SYN_del+pJ356/pp4_18SYN_del+pJ356.fasta --runDir /data/ltl/PROJECT_SELF/bwa_fastq/SV
+
+runWorkflow.py
+
+cat candidateSV.vcf | grep -e "SYN[[:space:]][45][0-9]\{5\}[[:space:]]" -e "SYN:[45][0-9]\{5\}[^1-9]" > ../../out/29_manta_inter.vcf
+
+#Gridss
+gridss --reference /data/ltl/PROJECT_SELF/ref/pp4_18SYN_del+pJ356/pp4_18SYN_del+pJ356.fasta --output /data/ltl/PROJECT_SELF/bwa_fastq/SV/29_gridss.vcf.gz --assembly /data/ltl/PROJECT_SELF/bwa_fastq/SV/29_gridss_assembly.bam /data/ltl/PROJECT_SELF/bwa_fastq/B29-103_L3_704D07_sorted.bam
+
+/data/ltl/jar/tools/gatk4/bcftools/bin/bcftools filter -i 'FILTER="PASS"' 29_gridss.vcf | grep -e "SYN[[:space:]][45][0-9]\{5\}[[:space:]]" -e "SYN:[45][0-9]\{5\}[^1-9]" > out/29_gridss_inter.vcf
+
+#lumpy
+samtools view -h B29-103_L3_704D07_raw.bam | samblaster --excludeDups --addMateTags --maxSplitCount 2 --minNonOverlap 20 | samtools view -Sb - > 29_samblaster.bam
+
+samtools view -b -F 1294 29_samblaster.bam > 29_samblaster.discordants.unsorted.bam
+
+samtools view -h 29_samblaster.bam | /data/ltl/miniconda3/pkgs/lumpy-sv-0.3.1-hdfd78af_3/bin/extractSplitReads_BwaMem -i stdin | samtools view -Sb - > 29_samblaster.splitters.unsorted.bam
+
+samtools sort 29_samblaster.discordants.unsorted.bam 29_samblaster.discordants
+samtools sort 29_samblaster.splitters.unsorted.bam 29_samblaster.splitters
+
+lumpyexpress -B 29_samblaster.bam -S 29_samblaster.splitters.bam -D 29_samblaster.discordants.bam -o 29_samblaster.vcf
+cat 29_samblaster.vcf | grep -e "SYN[[:space:]][45][0-9]\{5\}[[:space:]]" -e "SYN:[45][0-9]\{5\}[^1-9]" > SV/out/29_lumpy_inter.vcf
